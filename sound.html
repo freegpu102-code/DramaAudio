@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Drama Audio Player</title>
+<meta charset="UTF-8">
+
+<style>
+    body {
+        background: #0c0c0c;
+        color: #fff;
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 40px;
+    }
+    .buttons_container{
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    h1 {
+        font-size: 36px;
+        margin-bottom: 20px;
+        color: #ffcc00;
+        text-shadow: 0 0 15px #ffcc00;
+    }
+
+    .message {
+        color: #ff5555;
+        font-size: 22px;
+        margin-bottom: 20px;
+        visibility: hidden; /* Hidden by default */
+    }
+
+    .btn {
+        width: 320px;
+        padding: 25px;
+        margin: 18px;
+        font-size: 26px;
+        border-radius: 15px;
+        border: none;
+        cursor: pointer;
+        font-weight: bold;
+        transition: 0.15s;
+        letter-spacing: 1px;
+        box-shadow: 0 0 10px #000;
+        position: relative;
+    }
+
+    .btn:hover:not(:disabled) {
+        transform: scale(1.03);
+        box-shadow: 0 0 15px rgba(255,255,255,0.4);
+    }
+
+    /* Style for the 'X' Stop button inside the primary button */
+    .stop-btn {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(255, 0, 0, 0.8);
+        color: white;
+        border: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        line-height: 1;
+        opacity: 0; /* Hidden by default */
+        pointer-events: none;
+        transition: opacity 0.2s;
+    }
+
+    .btn.playing .stop-btn {
+        opacity: 1; /* Show when playing */
+        pointer-events: auto;
+    }
+
+
+    .btn:disabled:not(.playing) { /* Apply only when disabled AND not playing */
+        background: #333 !important;
+        color: #777 !important;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    #btn1 { background: #0066ff; }
+    #btn2 { background: #00aa55; }
+    #btn3 { background: #ff5500; }
+    #btn4 { background: #ff00ff; } /* Added distinct color for btn4 */
+
+    /* Playing glow effect */
+    .playing {
+        animation: glow 1s infinite alternate;
+        box-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff, 0 0 60px #00ffff;
+    }
+
+    @keyframes glow {
+        0% { box-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff, 0 0 60px #00ffff; }
+        100% { box-shadow: 0 0 40px #00ffff, 0 0 80px #00ffff, 0 0 120px #00ffff; }
+    }
+
+    .status {
+        margin-top: 30px;
+        font-size: 20px;
+        opacity: 0.8;
+    }
+</style>
+</head>
+
+<body>
+
+<h1>Drama Audio Controller</h1>
+
+<div class="message" id="cancelMessage">Press **ENTER** to cancel current playback.</div>
+
+
+<div id="buttonsContainer" class="buttons_container"></div>
+
+<div class="status" id="statusText">Ready to play any cue.</div>
+
+<script>
+/* ============================================
+   TRACK LIST
+   Provide label OR leave label blank to auto-create.
+   ============================================ */
+const tracks = [
+    { file: "kamariya.mp3", label: "Kamariya" },
+    { file: "chikiri.mp3", label: "Chikiri" },
+    { file: "mahesh.mp3", label: "Mahesh" },
+    { file: "ringtone.mp3", label: "Ringtone 1" },
+    { file: "bihari.mp3", label: "Bihari" },
+    { file: "ringtone2.mp3", label: "Ringtone 2" },
+    { file:"badal_barsa.mp3",label:"Badal Barsa"},
+    { file: "gun.mp3", label: "gun 2   " },
+    { file: "politics_sound.mp3", label: "Politics Sound" },
+    {file:"sad.mp3",label:"Sad"},
+];
+
+/* Auto-generate label if missing */
+tracks.forEach(t => {
+    if (!t.label) {
+        t.label = t.file
+            .replace(".mp3", "")
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, l => l.toUpperCase());
+    }
+});
+
+/* =============================
+   GENERATE BUTTONS DYNAMICALLY
+   ============================= */
+const container = document.body; 
+const buttonsContainer = document.getElementById("buttonsContainer");
+const status = document.getElementById("statusText");
+const cancelMessage = document.getElementById("cancelMessage");
+
+const buttons = [];
+const audios = [];
+
+tracks.forEach((track, index) => {
+    const btn = document.createElement("button");
+    btn.className = "btn";
+    btn.id = "btn" + (index + 1);
+    btn.innerHTML = `Play ${index + 1} — ${track.label}`;
+
+    const stopBtn = document.createElement("button");
+    stopBtn.className = "stop-btn";
+    stopBtn.innerText = "X";
+    stopBtn.dataset.index = index;
+
+    btn.appendChild(stopBtn);
+
+    // Append to the flexbox container
+    buttonsContainer.appendChild(btn);
+
+    buttons.push(btn);
+
+    const audio = new Audio("Audio/" + track.file);
+    audios.push(audio);
+});
+/* ============================================
+   GLOBAL STATE
+   ============================================ */
+let currentAudio = null;
+let currentButton = null;
+
+/* ============================================
+   STOP FUNCTION
+   ============================================ */
+function stopCurrentAudio(reason = "Finished") {
+    if (!currentAudio) return;
+
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+
+    currentButton.classList.remove("playing");
+
+    buttons.forEach(btn => btn.disabled = false);
+
+    status.innerText = `${currentButton.innerText.split("—")[1].trim()} ${reason}.`;
+
+    cancelMessage.style.visibility = "hidden";
+
+    currentAudio.onended = null;
+    currentAudio = null;
+    currentButton = null;
+}
+
+/* ============================================
+   PLAY FUNCTION
+   ============================================ */
+function playAudio(audio, btn) {
+    if (currentAudio) return;
+
+    currentAudio = audio;
+    currentButton = btn;
+
+    buttons.forEach(b => b.disabled = (b !== btn));
+
+    audio.play();
+    btn.classList.add("playing");
+
+    status.innerText = `Playing ${btn.innerText.split("—")[1].trim()}...`;
+    cancelMessage.style.visibility = "visible";
+
+    audio.onended = () => stopCurrentAudio("Finished");
+}
+
+/* ============================================
+   CLICK HANDLERS
+   ============================================ */
+buttons.forEach((btn, i) => {
+    btn.onclick = e => {
+        if (e.target.classList.contains("stop-btn")) {
+            stopCurrentAudio("Cancelled");
+            return;
+        }
+        playAudio(audios[i], btn);
+    };
+});
+
+document.querySelectorAll(".stop-btn").forEach(stopBtn => {
+    stopBtn.onclick = e => {
+        e.stopPropagation();
+        stopCurrentAudio("Cancelled");
+    };
+});
+
+/* ============================================
+   KEYBOARD HANDLERS
+   ============================================ */
+document.addEventListener("keydown", e => {
+    const key = e.key;
+
+    // Numbers to play
+    if (/^[1-9]$/.test(key)) {
+        const i = parseInt(key) - 1;
+        if (tracks[i]) {
+            const btn = buttons[i];
+
+            if (currentAudio && btn !== currentButton) return;
+
+            if (!btn.disabled || btn === currentButton) btn.click();
+        }
+    }
+
+    // ENTER cancels
+    if (key === "Enter") {
+        if (currentAudio) stopCurrentAudio("Cancelled");
+        e.preventDefault();
+    }
+});
+</script>
+
+
+</body>
+</html>
